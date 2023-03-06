@@ -1,0 +1,34 @@
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    password:
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: 100
+  application:
+    name: "reggie"
+  datasource:
+    driver-class-name: com.mysql.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/hm
+    password: 03100310+a
+    username: root
+    type: com.alibaba.druid.pool.DruidDataSource
+  main:
+    banner-mode: off
+
+server:
+  port: 8081
+
+mybatis-plus:
+  global-config:
+    db-config:
+      id-type: assign_id
+  configuration:
+    map-underscore-to-camel-case: true
+
+zzh:
+  basePath: D:\rjwm\
