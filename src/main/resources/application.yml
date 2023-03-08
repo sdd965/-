@@ -9,6 +9,9 @@ spring:
         max-idle: 8
         min-idle: 0
         max-wait: 100
+  cache:
+    redis:
+      time-to-live: 18000000
   application:
     name: "reggie"
   datasource:

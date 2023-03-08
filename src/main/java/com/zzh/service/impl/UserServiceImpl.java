@@ -15,6 +15,7 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -27,10 +28,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if(!ObjectUtils.isEmpty(phone))
         {
             String code = ValidateCodeUtils.generateValidateCode4String(4);
-            log.info(code);
-            redisCache.setCacheObject(phone,code);
-            return R.success("验证码发送成功");
-
+            redisCache.setCacheObject(phone,code,5, TimeUnit.MINUTES);
+            return R.success("验证码发送成功,有效期5分钟");
         }
         return R.error("验证码发送失败");
     }
@@ -39,9 +38,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public R<String> userLogin(Map<String, String> map) {
         String phone = map.get("phone");
         String code = redisCache.getCacheObject(phone);
+        if(ObjectUtils.isEmpty(code))
+        {
+            return R.error("验证码已失效");
+        }
         User user = new User();
         if(code.equals(map.get("code")))
         {
+            redisCache.deleteObject(phone);
             LambdaQueryWrapper<User> lambdaQueryWrapper = new LambdaQueryWrapper<>();
             lambdaQueryWrapper.eq(User::getPhone, phone);
             if(this.count(lambdaQueryWrapper)<1)

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zzh.common.utils.RedisCache;
 import com.zzh.dao.entity.Dish;
 import com.zzh.dao.entity.DishFlavor;
 import com.zzh.dao.entity.SetmealDish;
@@ -28,6 +29,7 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -35,6 +37,8 @@ import java.util.stream.Collectors;
 @Service
 public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements DishService {
 
+    @Autowired
+    private RedisCache redisCache;
     @Autowired
     private DishMapper dishMapper;
 
@@ -50,6 +54,7 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 
     @Override
     public R<String> addDish(AddDishReqVo addDishReqVo) {
+        redisCache.deleteObject(addDishReqVo.getCategoryId().toString());
         //虽然只是继承了Dish，但还是能够存进去
         this.save(addDishReqVo);
         Long id = addDishReqVo.getId();
@@ -105,7 +110,7 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 
     @Override
     public R<String> updateDishById(AddDishReqVo addDishReqVo) {
-
+        redisCache.deleteObject(addDishReqVo.getCategoryId().toString());
         Dish dish = new Dish();
 
         BeanUtils.copyProperties(addDishReqVo,dish,"flavors");
@@ -126,26 +131,34 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 
     @Override
     public R<List<GetOneDishRespVo>> selectByCategoryId(Long categoryId) {
-        LambdaQueryWrapper<Dish> lambdaQueryWrapper = new LambdaQueryWrapper<>();
-        lambdaQueryWrapper.eq(Dish::getCategoryId,categoryId).orderByAsc(Dish::getSort).eq(Dish::getStatus,1);
-        List<Dish> dishes = dishMapper.selectList(lambdaQueryWrapper);
-        if(ObjectUtils.isEmpty(dishes))
-        {
-            return R.success(null);
+        List<GetOneDishRespVo> list = redisCache.getCacheObject(categoryId.toString());
+        if(ObjectUtils.isEmpty(list)) {
+            LambdaQueryWrapper<Dish> lambdaQueryWrapper = new LambdaQueryWrapper<>();
+            lambdaQueryWrapper.eq(Dish::getCategoryId, categoryId).orderByAsc(Dish::getSort).eq(Dish::getStatus, 1);
+            List<Dish> dishes = dishMapper.selectList(lambdaQueryWrapper);
+            if (ObjectUtils.isEmpty(dishes)) {
+                return R.success(null);
+            }
+            List<GetOneDishRespVo> getOneDishRespVos = dishes.stream().map(dish -> {
+                GetOneDishRespVo getOneDishRespVo = new GetOneDishRespVo();
+                LambdaQueryWrapper<DishFlavor> dishFlavorLambdaQueryWrapper = new LambdaQueryWrapper<>();
+                dishFlavorLambdaQueryWrapper.eq(DishFlavor::getDishId, dish.getId());
+                getOneDishRespVo.setFlavors(dishFlavorService.list(dishFlavorLambdaQueryWrapper));
+                BeanUtils.copyProperties(dish, getOneDishRespVo);
+                return getOneDishRespVo;
+            }).collect(Collectors.toList());
+            redisCache.setCacheObject(categoryId.toString(),getOneDishRespVos,5, TimeUnit.MINUTES);
+            return R.success(getOneDishRespVos);
         }
-        List<GetOneDishRespVo> getOneDishRespVos = dishes.stream().map(dish -> {
-            GetOneDishRespVo getOneDishRespVo = new GetOneDishRespVo();
-            LambdaQueryWrapper<DishFlavor> dishFlavorLambdaQueryWrapper = new LambdaQueryWrapper<>();
-            dishFlavorLambdaQueryWrapper.eq(DishFlavor::getDishId,dish.getId());
-            getOneDishRespVo.setFlavors(dishFlavorService.list(dishFlavorLambdaQueryWrapper));
-            BeanUtils.copyProperties(dish,getOneDishRespVo);
-            return getOneDishRespVo;
-        }).collect(Collectors.toList());
-        return R.success(getOneDishRespVos);
+        else
+        {
+            return R.success(list);
+        }
     }
 
     @Override
     public R<String> changeStatusToDisAble(List<Long> ids) {
+        Long categoryId = this.getById(ids.get(0)).getCategoryId();
         LambdaQueryWrapper<SetmealDish> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.in(SetmealDish::getDishId, ids);
         if(setmealDishService.count(lambdaQueryWrapper)>0)
@@ -156,20 +169,24 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         dishLambdaQueryWrapper.in(Dish::getId,ids);
         dishLambdaQueryWrapper.set(Dish::getStatus,0);
         this.update(dishLambdaQueryWrapper);
+        redisCache.deleteObject(categoryId.toString());
         return R.success("状态更改成功");
     }
 
     @Override
     public R<String> changeStatusToEnAble(List<Long> ids) {
+        Long categoryId = this.getById(ids.get(0)).getCategoryId();
         LambdaUpdateWrapper<Dish> dishLambdaQueryWrapper =new LambdaUpdateWrapper<>();
         dishLambdaQueryWrapper.in(Dish::getId,ids);
         dishLambdaQueryWrapper.set(Dish::getStatus,1);
         this.update(dishLambdaQueryWrapper);
+        redisCache.deleteObject(categoryId.toString());
         return R.success("状态更改成功");
     }
 
     @Override
     public R<String> deleteByids(List<Long> ids) {
+        Long categoryId = this.getById(ids.get(0)).getCategoryId();
         LambdaQueryWrapper<Dish> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.in(Dish::getId, ids);
         lambdaQueryWrapper.eq(Dish::getStatus, 1);
@@ -180,6 +197,7 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         LambdaQueryWrapper<Dish> lambdaQueryWrapper1 = new LambdaQueryWrapper<>();
         lambdaQueryWrapper1.in(Dish::getId,ids);
         this.remove(lambdaQueryWrapper1);
+        redisCache.deleteObject(categoryId.toString());
         return R.success("删除成功");
     }
 

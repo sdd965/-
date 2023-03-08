@@ -8,6 +8,8 @@ import com.zzh.vo.reqVo.PageQueryReqVo;
 import com.zzh.vo.respVo.PageQueryRespVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +22,7 @@ public class SetmealController {
     @Autowired
     private SetmealService setmealService;
 
+    @CacheEvict(value = "setmealCache", key = "#setmealDto.categoryId")
     @PostMapping
     public R<String> addMeal(@RequestBody SetmealDto setmealDto)
     {
@@ -32,6 +35,7 @@ public class SetmealController {
         return setmealService.pageQuery(pageQueryReqVo);
     }
 
+    @CacheEvict(value = "setmealCache", key = "#ids.get(0)")
     @DeleteMapping
     public R<String> setmealDelete(@RequestParam List<Long> ids)
     {
@@ -46,6 +50,7 @@ public class SetmealController {
         return setmealService.getSetmealBySetmealId(id);
     }
 
+    @CacheEvict(value = "setmealCache", key = "#setmealDto.categoryId")
     @PutMapping
     public R<String> updateBySetmealId(@RequestBody SetmealDto setmealDto)
     {
@@ -53,6 +58,7 @@ public class SetmealController {
         return R.success("更新成功");
     }
 
+    @Cacheable(value = "setmealCache",key = "#categoryId", unless = "#result==null")
     @GetMapping
     @RequestMapping("/list")
     public R<List<Setmeal>> getSetmealByCategoryId(@RequestParam Long categoryId)
