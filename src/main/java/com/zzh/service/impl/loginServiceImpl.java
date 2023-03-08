@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class loginServiceImpl extends ServiceImpl<EmployeeMapper, Employee> implements LoginService {
@@ -40,7 +41,7 @@ public class loginServiceImpl extends ServiceImpl<EmployeeMapper, Employee> impl
             return R.error("该用户已经停用");
         }
         else{
-            redisCache.setCacheObject("1",employee);
+            redisCache.setCacheObject("1",employee,30, TimeUnit.MINUTES);
             return R.success(employee);
         }
 
